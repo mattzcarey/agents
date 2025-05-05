@@ -2,9 +2,9 @@ import { useAgent } from "agents/react";
 import { createRoot } from "react-dom/client";
 import { useRef, useState } from "react";
 import "./styles.css";
-import type { State } from "./server";
 import { agentFetch } from "agents/client";
 import { nanoid } from "nanoid";
+import type { MCPServerState } from "agents";
 
 let sessionId = localStorage.getItem("sessionId");
 if (!sessionId) {
@@ -16,7 +16,7 @@ if (!sessionId) {
 function App() {
   const [isConnected, setIsConnected] = useState(false);
   const mcpInputRef = useRef<HTMLInputElement>(null);
-  const [mcpState, setMcpState] = useState<State>({
+  const [mcpState, setMcpState] = useState<MCPServerState>({
     servers: {},
     tools: [],
     prompts: [],
@@ -28,8 +28,8 @@ function App() {
     name: sessionId!,
     onOpen: () => setIsConnected(true),
     onClose: () => setIsConnected(false),
-    onStateUpdate: (state: State) => {
-      setMcpState(state);
+    onMcpUpdate: (mcpServers: MCPServerState) => {
+      setMcpState(mcpServers);
     },
   });
 
@@ -63,8 +63,9 @@ function App() {
       servers: {
         ...mcpState.servers,
         placeholder: {
-          url: serverUrl,
+          server_url: serverUrl,
           state: "connecting",
+          auth_url: null,
         },
       },
     });
@@ -94,7 +95,7 @@ function App() {
         {Object.entries(mcpState.servers).map(([id, server]) => (
           <div key={id} className={"mcp-server"}>
             <div>
-              <div>URL: {server.url}</div>
+              <div>URL: {server.server_url}</div>
               <div className="status-indicator">
                 <div
                   className={`status-dot ${server.state === "ready" ? "connected" : ""}`}
@@ -102,10 +103,10 @@ function App() {
                 {server.state} (id: {id})
               </div>
             </div>
-            {server.state === "authenticating" && server.authUrl && (
+            {server.state === "authenticating" && server.auth_url && (
               <button
                 type="button"
-                onClick={() => openPopup(server.authUrl as string)}
+                onClick={() => openPopup(server.auth_url as string)}
               >
                 Authorize
               </button>

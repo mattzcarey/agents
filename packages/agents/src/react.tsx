@@ -1,7 +1,7 @@
 import type { PartySocket } from "partysocket";
 import { usePartySocket } from "partysocket/react";
 import { useCallback, useRef } from "react";
-import type { RPCRequest, RPCResponse } from "./";
+import type { MCPServerState, RPCRequest, RPCResponse } from "./";
 import type { StreamOptions } from "./client";
 
 /**
@@ -39,6 +39,7 @@ export type UseAgentOptions<State = unknown> = Omit<
   name?: string;
   /** Called when the Agent's state is updated */
   onStateUpdate?: (state: State, source: "server" | "client") => void;
+  onMcpUpdate?: (mcpServers: MCPServerState) => void;
 };
 
 /**
@@ -93,6 +94,9 @@ export function useAgent<State = unknown>(
         if (parsedMessage.type === "cf_agent_state") {
           options.onStateUpdate?.(parsedMessage.state as State, "server");
           return;
+        }
+        if (parsedMessage.type === "cf_agent_mcp_servers") {
+          options.onMcpUpdate?.(parsedMessage.mcp as MCPServerState);
         }
         if (parsedMessage.type === "rpc") {
           const response = parsedMessage as RPCResponse;

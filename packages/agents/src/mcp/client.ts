@@ -60,7 +60,11 @@ export class MCPClientManager {
       client?: ConstructorParameters<typeof Client>[1];
       capabilities?: ClientCapabilities;
     } = {}
-  ): Promise<{ id: string; authUrl: string | undefined }> {
+  ): Promise<{
+    id: string;
+    authUrl: string | undefined;
+    clientId: string | undefined;
+  }> {
     const id = options.reconnect?.id ?? nanoid(8);
 
     if (!options.transport?.authProvider) {
@@ -99,6 +103,7 @@ export class MCPClientManager {
     return {
       id,
       authUrl,
+      clientId: options.transport?.authProvider?.clientId,
     };
   }
 

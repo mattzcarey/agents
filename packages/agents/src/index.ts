@@ -13,6 +13,13 @@ import { nanoid } from "nanoid";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import { MCPClientManager } from "./mcp/client";
+import { DurableObjectOAuthClientProvider } from "./mcp/do-oauth-client-provider";
+import type {
+  Tool,
+  Resource,
+  Prompt,
+} from "@modelcontextprotocol/sdk/types.js";
+import { camelCaseToKebabCase } from "./client";
 
 export type { Connection, WSMessage, ConnectionContext } from "partyserver";
 
@@ -158,6 +165,43 @@ function getNextCronTime(cron: string) {
   const interval = parseCronExpression(cron);
   return interval.getNextDate();
 }
+
+/**
+ * MCP Server state update message from server -> Client
+ */
+export type MCPServerMessage = {
+  type: "cf_agent_mcp_servers";
+  mcp: MCPServerState;
+};
+
+export type MCPServerState = {
+  servers: {
+    [id: string]: {
+      server_url: string;
+      auth_url: string | null;
+      state:
+        | "authenticating"
+        | "connecting"
+        | "ready"
+        | "discovering"
+        | "failed";
+    };
+  };
+  tools: Tool[];
+  prompts: Prompt[];
+  resources: Resource[];
+};
+
+/**
+ * MCP Server data stored in DO SQL for resuming MCP Server connections
+ */
+type MCPServerRow = {
+  id: string;
+  server_url: string;
+  client_id: string | null;
+  auth_url: string | null;
+  callback_url: string;
+};
 
 const STATE_ROW_ID = "cf_state_row_id";
 const STATE_WAS_CHANGED = "cf_state_was_changed";
@@ -321,6 +365,16 @@ export class Agent<Env, State = unknown> extends Server<Env> {
       });
     });
 
+    this.sql`
+      CREATE TABLE IF NOT EXISTS cf_agents_mcp_servers (
+        id TEXT PRIMARY KEY NOT NULL,
+        server_url TEXT NOT NULL,
+        callback_url TEXT NOT NULL,
+        client_id TEXT,
+        auth_url TEXT
+      )
+    `;
+
     const _onMessage = this.onMessage.bind(this);
     this.onMessage = async (connection: Connection, message: WSMessage) => {
       return agentContext.run(
@@ -413,10 +467,87 @@ export class Agent<Env, State = unknown> extends Server<Env> {
                 })
               );
             }
+
+            connection.send(
+              JSON.stringify({
+                type: "cf_agent_mcp_servers",
+                mcp: this.#getMcpServerStateInternal(),
+              })
+            );
+
             return this.#tryCatch(() => _onConnect(connection, ctx));
           }, 20);
         }
       );
+    };
+
+    const _onRequest = this.onRequest.bind(this);
+    this.onRequest = async (request: Request) => {
+      if (this.mcp.isCallbackRequest(request)) {
+        await this.mcp.handleCallbackRequest(request);
+
+        // after the MCP connection handshake, we can send updated mcp state
+        this.broadcast(
+          JSON.stringify({
+            type: "cf_agent_mcp_servers",
+            mcp: this.#getMcpServerStateInternal(),
+          })
+        );
+
+        // We probably should let the user configure this response/redirect, but this is fine for now.
+        return new Response("<script>window.close();</script>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }
+
+      return this.#tryCatch(() => _onRequest(request));
+    };
+
+    const _onStart = this.onStart.bind(this);
+    this.onStart = async () => {
+      const servers = this.sql<MCPServerRow>`
+        SELECT id, server_url, client_id, auth_url, callback_url FROM cf_agents_mcp_servers;
+      `;
+
+      // from DO storage, reconnect to all servers using our saved auth information
+      for (const server of servers) {
+        const authProvider = new DurableObjectOAuthClientProvider(
+          this.ctx.storage,
+          this.name,
+          server.callback_url
+        );
+
+        authProvider.serverId = server.id;
+        if (server.client_id) {
+          authProvider.clientId = server.client_id;
+        }
+
+        const { id, authUrl, clientId } = await this.mcp.connect(
+          server.server_url,
+          {
+            reconnect: {
+              id: server.id,
+              oauthClientId: server.client_id ?? undefined,
+            },
+            transport: { authProvider },
+          }
+        );
+
+        this.sql`
+          INSERT OR REPLACE INTO cf_agents_mcp_servers (id, server_url, client_id, auth_url, callback_url)
+          VALUES (${id}, ${server.server_url}, ${clientId ?? null}, ${authUrl ?? null}, ${server.callback_url});
+        `;
+      }
+
+      this.broadcast(
+        JSON.stringify({
+          type: "cf_agent_mcp_servers",
+          mcp: this.#getMcpServerStateInternal(),
+        })
+      );
+
+      await this.#tryCatch(() => _onStart());
     };
   }
 
@@ -762,6 +893,7 @@ export class Agent<Env, State = unknown> extends Server<Env> {
     // drop all tables
     this.sql`DROP TABLE IF EXISTS cf_agents_state`;
     this.sql`DROP TABLE IF EXISTS cf_agents_schedules`;
+    this.sql`DROP TABLE IF EXISTS cf_agents_mcp_servers`;
 
     // delete all alarms
     await this.ctx.storage.deleteAlarm();
@@ -775,6 +907,80 @@ export class Agent<Env, State = unknown> extends Server<Env> {
   #isCallable(method: string): boolean {
     // biome-ignore lint/complexity/noBannedTypes: <explanation>
     return callableMetadata.has(this[method as keyof this] as Function);
+  }
+
+  /**
+   * Connect to a new MCP Server
+   *
+   * @param url MCP Server SSE URL
+   * @param callbackHost Base host for the agent, used for the redirect URI.
+   * @param agentsPrefix agents routing prefix if not using `agents`
+   * @returns authUrl
+   */
+  async addMcpServer(
+    url: string,
+    callbackHost: string,
+    agentsPrefix = "agents"
+  ): Promise<{ id: string; authUrl: string | undefined }> {
+    const callback_url = `${callbackHost}/${agentsPrefix}/${camelCaseToKebabCase(this.#ParentClass.name)}/${this.name}/callback`;
+    const authProvider = new DurableObjectOAuthClientProvider(
+      this.ctx.storage,
+      this.name,
+      callback_url
+    );
+
+    const { id, authUrl, clientId } = await this.mcp.connect(url, {
+      transport: { authProvider },
+    });
+
+    this.sql`
+      INSERT OR REPLACE INTO cf_agents_mcp_servers (id, server_url, client_id, auth_url, callback_url)
+      VALUES (${id}, ${url}, ${clientId ?? null}, ${authUrl ?? null}, ${callback_url});
+    `;
+
+    this.broadcast(
+      JSON.stringify({
+        type: "cf_agent_mcp_servers",
+        mcp: this.#getMcpServerStateInternal(),
+      })
+    );
+
+    return {
+      id,
+      authUrl,
+    };
+  }
+
+  async removeMcpServer(id: string) {
+    this.mcp.closeConnection(id);
+    this.sql`
+      DELETE FROM cf_agents_mcp_servers WHERE id = ${id};
+    `;
+    this.broadcast(
+      JSON.stringify({
+        type: "cf_agent_mcp_servers",
+        mcp: this.#getMcpServerStateInternal(),
+      })
+    );
+  }
+
+  #getMcpServerStateInternal(): MCPServerState {
+    const mcpState: MCPServerState = {
+      servers: {},
+      tools: this.mcp.listTools(),
+      prompts: this.mcp.listPrompts(),
+      resources: this.mcp.listResources(),
+    };
+
+    for (const [id, conn] of Object.entries(this.mcp.mcpConnections)) {
+      mcpState.servers[id] = {
+        state: conn.connectionState,
+        server_url: conn.url.toString(),
+        auth_url: conn.options.transport.authProvider?.authUrl ?? null,
+      };
+    }
+
+    return mcpState;
   }
 }
 
