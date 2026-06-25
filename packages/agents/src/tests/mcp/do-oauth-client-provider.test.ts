@@ -118,5 +118,27 @@ describe("DurableObjectOAuthClientProvider PKCE binding", () => {
       // invalidateCredentials("verifier") sweeps all three, including the orphan.
       expect(result.after).toBe(0);
     });
+
+    it("clears server-scoped discovery state even before a client id exists", async () => {
+      const result =
+        await agent().testInvalidateDiscoveryDeletesServerScopedState();
+
+      expect(result.discoveryBefore).toBe("https://auth.example.com");
+      expect(result.authorizationServerFallbackBefore).toBe(
+        "https://auth.example.com"
+      );
+      expect(result.resourceFallbackBefore).toBe(
+        "https://mcp.example.com/.well-known/oauth-protected-resource"
+      );
+      expect(result.authorizationServerOverrideBefore).toBe(
+        "https://auth2.example.com"
+      );
+      expect(result.resourceOverrideBefore).toBe(
+        "https://resource.example.com/mcp"
+      );
+      expect(result.discoveryAfter).toBeUndefined();
+      expect(result.authorizationServerAfter).toBeUndefined();
+      expect(result.resourceAfter).toBeUndefined();
+    });
   });
 });

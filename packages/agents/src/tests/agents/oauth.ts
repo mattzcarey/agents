@@ -680,6 +680,56 @@ export class TestOAuthAgent extends Agent {
     return { defaultBefore, withChallengeBefore, after };
   }
 
+  async testInvalidateDiscoveryDeletesServerScopedState(): Promise<{
+    discoveryBefore: string | undefined;
+    authorizationServerFallbackBefore: string | undefined;
+    resourceFallbackBefore: string | undefined;
+    authorizationServerOverrideBefore: string | undefined;
+    resourceOverrideBefore: string | undefined;
+    discoveryAfter: unknown;
+    authorizationServerAfter: string | undefined;
+    resourceAfter: string | undefined;
+  }> {
+    const provider = new DurableObjectOAuthClientProvider(
+      this.ctx.storage,
+      `discovery-${crypto.randomUUID()}`,
+      "https://client.example.com/callback"
+    );
+    provider.serverId = `server-${crypto.randomUUID()}`;
+
+    await provider.saveDiscoveryState({
+      authorizationServerUrl: "https://auth.example.com",
+      resourceMetadataUrl:
+        "https://mcp.example.com/.well-known/oauth-protected-resource"
+    });
+
+    const discoveryBefore = (await provider.discoveryState())
+      ?.authorizationServerUrl;
+    const authorizationServerFallbackBefore =
+      await provider.authorizationServerUrl();
+    const resourceFallbackBefore = await provider.resourceUrl();
+
+    await provider.saveAuthorizationServerUrl("https://auth2.example.com");
+    await provider.saveResourceUrl("https://resource.example.com/mcp");
+
+    const authorizationServerOverrideBefore =
+      await provider.authorizationServerUrl();
+    const resourceOverrideBefore = await provider.resourceUrl();
+
+    await provider.invalidateCredentials("discovery");
+
+    return {
+      discoveryBefore,
+      authorizationServerFallbackBefore,
+      resourceFallbackBefore,
+      authorizationServerOverrideBefore,
+      resourceOverrideBefore,
+      discoveryAfter: await provider.discoveryState(),
+      authorizationServerAfter: await provider.authorizationServerUrl(),
+      resourceAfter: await provider.resourceUrl()
+    };
+  }
+
   async testSaveCodeVerifierDeletesExpiredChallengeOrphans(): Promise<{
     expiredBefore: boolean;
     expiredAfter: boolean;

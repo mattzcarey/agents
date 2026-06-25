@@ -1,4 +1,7 @@
-import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
+import type {
+  OAuthClientProvider,
+  OAuthDiscoveryState
+} from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
   OAuthClientInformation,
   OAuthClientInformationFull,
@@ -296,11 +299,24 @@ export class DurableObjectOAuthClientProvider implements AgentMcpOAuthProvider {
   }
 
   async invalidateCredentials(
-    scope: "all" | "client" | "tokens" | "verifier"
+    scope: "all" | "client" | "tokens" | "verifier" | "discovery"
   ): Promise<void> {
-    if (!this._clientId_) return;
-
     const deleteKeys: string[] = [];
+
+    if (scope === "all" || scope === "discovery") {
+      deleteKeys.push(
+        this.discoveryStateKey(),
+        this.authorizationServerUrlKey(),
+        this.resourceUrlKey()
+      );
+    }
+
+    if (!this._clientId_) {
+      if (deleteKeys.length > 0) {
+        await this.storage.delete(deleteKeys);
+      }
+      return;
+    }
 
     if (scope === "all" || scope === "client") {
       deleteKeys.push(this.clientInfoKey(this.clientId));
@@ -319,6 +335,56 @@ export class DurableObjectOAuthClientProvider implements AgentMcpOAuthProvider {
     if (deleteKeys.length > 0) {
       await this.storage.delete(deleteKeys);
     }
+  }
+
+  discoveryStateKey() {
+    return `/${this.clientName}/${this.serverId}/discovery_state`;
+  }
+
+  async discoveryState(): Promise<OAuthDiscoveryState | undefined> {
+    return (
+      (await this.storage.get<OAuthDiscoveryState>(this.discoveryStateKey())) ??
+      undefined
+    );
+  }
+
+  async saveDiscoveryState(state: OAuthDiscoveryState): Promise<void> {
+    await this.storage.put(this.discoveryStateKey(), state);
+  }
+
+  authorizationServerUrlKey() {
+    return `/${this.clientName}/${this.serverId}/authorization_server_url`;
+  }
+
+  async authorizationServerUrl(): Promise<string | undefined> {
+    return (
+      (await this.storage.get<string>(this.authorizationServerUrlKey())) ??
+      (await this.discoveryState())?.authorizationServerUrl
+    );
+  }
+
+  async saveAuthorizationServerUrl(
+    authorizationServerUrl: string
+  ): Promise<void> {
+    await this.storage.put(
+      this.authorizationServerUrlKey(),
+      authorizationServerUrl
+    );
+  }
+
+  resourceUrlKey() {
+    return `/${this.clientName}/${this.serverId}/resource_url`;
+  }
+
+  async resourceUrl(): Promise<string | undefined> {
+    return (
+      (await this.storage.get<string>(this.resourceUrlKey())) ??
+      (await this.discoveryState())?.resourceMetadataUrl
+    );
+  }
+
+  async saveResourceUrl(resourceUrl: string): Promise<void> {
+    await this.storage.put(this.resourceUrlKey(), resourceUrl);
   }
 
   codeVerifierKey(clientId: string) {
