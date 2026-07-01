@@ -50,12 +50,9 @@ jobs:
       - name: Run repro-agent
         working-directory: automations/repro-agent
         env:
-          # Inference: Pi/Flue routes through the Cloudflare AI Gateway using
-          # the same secrets Bonk uses. These stay in the parent process and
-          # are NOT forwarded into the agent's sandbox shell.
-          CLOUDFLARE_API_KEY: ${{ secrets.CF_AI_GATEWAY_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_AI_GATEWAY_ACCOUNT_ID }}
-          CLOUDFLARE_GATEWAY_ID: ${{ secrets.CF_AI_GATEWAY_NAME }}
+          # Inference: Pi/Flue calls OpenAI directly. This stays in the parent
+          # process and is NOT forwarded into the agent's sandbox shell.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # Forwarded into the sandbox so the agent can read the issue and
           # post its findings. Note: this is the GH token, NOT a Cloudflare
           # token — so `wrangler deploy --temporary` stays unauthenticated.

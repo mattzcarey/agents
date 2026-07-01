@@ -13,7 +13,7 @@ import * as v from "valibot";
  * Runs in GitHub Actions. The `local()` sandbox gets only a scoped `GH_TOKEN`.
  */
 const agent = defineAgent(() => ({
-  model: "cloudflare-ai-gateway/claude-opus-4-8",
+  model: "openai/gpt-5.5",
   sandbox: local({
     env: {
       GH_TOKEN: process.env.GH_TOKEN,

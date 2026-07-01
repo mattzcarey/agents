@@ -13,11 +13,11 @@ import * as v from "valibot";
  * the issue and post a comment back. We deliberately DO NOT forward any
  * Cloudflare credentials into the sandbox: `wrangler deploy --temporary`
  * requires an unauthenticated Wrangler, and errors if `CLOUDFLARE_API_TOKEN`
- * or OAuth is present. The Flue/Pi harness still uses the AI Gateway creds
- * from the parent process for inference — those never reach the agent shell.
+ * or OAuth is present. The Flue/Pi harness uses `OPENAI_API_KEY` from the
+ * parent process for inference — that never reaches the agent shell.
  */
 const agent = defineAgent(() => ({
-  model: "cloudflare-ai-gateway/claude-opus-4-8",
+  model: "openai/gpt-5.5",
   sandbox: local({
     env: {
       GH_TOKEN: process.env.GH_TOKEN,

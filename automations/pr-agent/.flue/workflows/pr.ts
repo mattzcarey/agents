@@ -16,7 +16,7 @@ import * as v from "valibot";
  * are forwarded — this agent edits and tests code, it does not deploy.
  */
 const agent = defineAgent(() => ({
-  model: "cloudflare-ai-gateway/claude-opus-4-8",
+  model: "openai/gpt-5.5",
   sandbox: local({
     env: {
       GH_TOKEN: process.env.GH_TOKEN,
