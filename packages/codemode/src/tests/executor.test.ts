@@ -9,6 +9,7 @@ import { env } from "cloudflare:workers";
 import {
   DynamicWorkerExecutor,
   ToolDispatcher,
+  MAX_EXECUTE_TOOL_CALLS,
   type ResolvedProvider
 } from "../executor";
 
@@ -119,6 +120,38 @@ describe("DynamicWorkerExecutor", () => {
       }
     ]);
     expect(result.toolCalls?.[0]?.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("caps tool call logs at the most recent entries", async () => {
+    const add = vi.fn(async (...args: unknown[]) => {
+      const input = args[0] as Record<string, unknown>;
+      return input.i as number;
+    });
+    const executor = new DynamicWorkerExecutor({ loader: env.LOADER });
+
+    const result = await executor.execute(
+      `async () => {
+        for (let i = 0; i < ${MAX_EXECUTE_TOOL_CALLS + 5}; i++) {
+          await codemode.add({ i });
+        }
+        return "done";
+      }`,
+      [codemodeProvider({ add })]
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(result.toolCalls).toHaveLength(MAX_EXECUTE_TOOL_CALLS);
+    expect(result.droppedToolCallCount).toBe(5);
+    expect(result.toolCalls?.[0]).toMatchObject({
+      provider: "codemode",
+      name: "add",
+      args: [{ i: 5 }]
+    });
+    expect(result.toolCalls?.at(-1)).toMatchObject({
+      provider: "codemode",
+      name: "add",
+      args: [{ i: MAX_EXECUTE_TOOL_CALLS + 4 }]
+    });
   });
 
   it("should preserve Uint8Array tool arguments and results", async () => {

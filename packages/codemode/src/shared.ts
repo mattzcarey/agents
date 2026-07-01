@@ -37,6 +37,7 @@ export type CodeOutput = {
   result: unknown;
   logs?: string[];
   toolCalls?: ExecuteToolCall[];
+  droppedToolCallCount?: number;
 };
 
 /**

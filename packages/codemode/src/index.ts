@@ -2,9 +2,11 @@ export { runCode } from "./run-code";
 export {
   DynamicWorkerExecutor,
   ToolDispatcher,
+  MAX_EXECUTE_TOOL_CALLS,
   type DynamicWorkerExecutorOptions,
   type Executor,
   type ExecuteResult,
+  type ExecuteToolCall,
   type ExecuteOptions,
   type ConnectorBinding,
   type ResolvedProvider,
