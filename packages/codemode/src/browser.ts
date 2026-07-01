@@ -12,7 +12,8 @@ export {
 export type {
   Executor,
   ExecuteResult,
-  ResolvedProvider
+  ResolvedProvider,
+  ToolCallLogEntry
 } from "./executor-types";
 export type {
   JsonSchemaToolDescriptor,

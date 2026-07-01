@@ -109,7 +109,37 @@ describe("DynamicWorkerExecutor", () => {
     );
 
     expect(result.result).toBe(7);
+    expect(result.toolCalls).toEqual([
+      {
+        provider: "codemode",
+        name: "add",
+        args: [{ a: 3, b: 4 }],
+        result: 7
+      }
+    ]);
     expect(add).toHaveBeenCalledWith({ a: 3, b: 4 });
+  });
+
+  it("should log failed tool calls in execution results", async () => {
+    const fail = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const executor = new DynamicWorkerExecutor({ loader: env.LOADER });
+
+    const result = await executor.execute(
+      "async () => await codemode.fail({ why: 'test' })",
+      [codemodeProvider({ fail })]
+    );
+
+    expect(result.error).toBe("boom");
+    expect(result.toolCalls).toEqual([
+      {
+        provider: "codemode",
+        name: "fail",
+        args: [{ why: "test" }],
+        error: "boom"
+      }
+    ]);
   });
 
   it("should preserve Uint8Array tool arguments and results", async () => {

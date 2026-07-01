@@ -21,7 +21,8 @@ export type {
   ExecuteOptions,
   Executor,
   ConnectorBinding,
-  ResolvedProvider
+  ResolvedProvider,
+  ToolCallLogEntry
 } from "./executor-types";
 // ConnectorBinding re-exported for public API — used by proxy-tool and runtime.
 
@@ -370,10 +371,18 @@ export class DynamicWorkerExecutor implements Executor {
           `        if (Object.prototype.hasOwnProperty.call(target, toolName)) return target[toolName];\n` +
           `        if (typeof toolName !== "string") return undefined;\n` +
           `        return async (...args) => {\n` +
-          `          const resJson = await __dispatchers.${p.name}.call(String(toolName), __stringifyForCodemode(args));\n` +
-          `          const data = __parseForCodemode(resJson);\n` +
-          `          if (data.error) throw new Error(data.error);\n` +
-          `          return data.result;\n` +
+          `          const __call = { provider: ${JSON.stringify(p.name)}, name: String(toolName), args };\n` +
+          `          __toolCalls.push(__call);\n` +
+          `          try {\n` +
+          `            const resJson = await __dispatchers.${p.name}.call(String(toolName), __stringifyForCodemode(args));\n` +
+          `            const data = __parseForCodemode(resJson);\n` +
+          `            if (data.error) throw new Error(data.error);\n` +
+          `            __call.result = data.result;\n` +
+          `            return data.result;\n` +
+          `          } catch (err) {\n` +
+          `            __call.error = err && err.message ? String(err.message) : String(err);\n` +
+          `            throw err;\n` +
+          `          }\n` +
           `        };\n` +
           `      }\n` +
           `    });`
@@ -400,12 +409,20 @@ export class DynamicWorkerExecutor implements Executor {
         `      get: (_, toolName) => {\n` +
         `        if (typeof toolName !== "string") return undefined;\n` +
         `        return async (...args) => {\n` +
-        `          const __r = await __connectors.${c.name}.callTool(toolName, args[0]);\n` +
-        `          if (__r && typeof __r === "object") {\n` +
-        `            if (__r.${CONNECTOR_CONTROL_KEY} === "pause") throw new Error("${PAUSE_SENTINEL_LITERAL}");\n` +
-        `            if (__r.${CONNECTOR_CONTROL_KEY} === "error") throw new Error(String(__r.message));\n` +
+        `          const __call = { provider: ${JSON.stringify(c.name)}, name: String(toolName), args };\n` +
+        `          __toolCalls.push(__call);\n` +
+        `          try {\n` +
+        `            const __r = await __connectors.${c.name}.callTool(toolName, args[0]);\n` +
+        `            if (__r && typeof __r === "object") {\n` +
+        `              if (__r.${CONNECTOR_CONTROL_KEY} === "pause") throw new Error("${PAUSE_SENTINEL_LITERAL}");\n` +
+        `              if (__r.${CONNECTOR_CONTROL_KEY} === "error") throw new Error(String(__r.message));\n` +
+        `            }\n` +
+        `            __call.result = __r;\n` +
+        `            return __r;\n` +
+        `          } catch (err) {\n` +
+        `            __call.error = err && err.message ? String(err.message) : String(err);\n` +
+        `            throw err;\n` +
         `          }\n` +
-        `          return __r;\n` +
         `        };\n` +
         `      }\n` +
         `    });`
@@ -417,6 +434,7 @@ export class DynamicWorkerExecutor implements Executor {
       "export default class CodeExecutor extends WorkerEntrypoint {",
       "  async evaluate(__dispatchers = {}, __connectors = {}) {",
       "    const __logs = [];",
+      "    const __toolCalls = [];",
       '    console.log = (...a) => { __logs.push(a.map(String).join(" ")); };',
       '    console.warn = (...a) => { __logs.push("[warn] " + a.map(String).join(" ")); };',
       '    console.error = (...a) => { __logs.push("[error] " + a.map(String).join(" ")); };',
@@ -436,9 +454,9 @@ export class DynamicWorkerExecutor implements Executor {
           timeoutMs +
           "))",
         "      ]);",
-        "      return { result, logs: __logs };",
+        "      return { result, logs: __logs, toolCalls: __toolCalls };",
         "    } catch (err) {",
-        "      return { result: undefined, error: err.message, logs: __logs };",
+        "      return { result: undefined, error: err.message, logs: __logs, toolCalls: __toolCalls };",
         "    }",
         "  }",
         "}"
@@ -506,11 +524,7 @@ export class DynamicWorkerExecutor implements Executor {
         evaluate(
           dispatchers: Record<string, ToolDispatcher>,
           connectors: Record<string, unknown>
-        ): Promise<{
-          result: unknown;
-          error?: string;
-          logs?: string[];
-        }>;
+        ): Promise<ExecuteResult>;
       };
       try {
         const response = await entrypoint.evaluate(
@@ -522,11 +536,16 @@ export class DynamicWorkerExecutor implements Executor {
           return {
             result: undefined,
             error: response.error,
-            logs: response.logs
+            logs: response.logs,
+            toolCalls: response.toolCalls
           };
         }
 
-        return { result: response.result, logs: response.logs };
+        return {
+          result: response.result,
+          logs: response.logs,
+          toolCalls: response.toolCalls
+        };
       } finally {
         disposeQuietly(entrypoint);
       }

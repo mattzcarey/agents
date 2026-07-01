@@ -16,7 +16,8 @@ import {
 import type {
   ExecuteResult,
   Executor,
-  ResolvedProvider
+  ResolvedProvider,
+  ToolCallLogEntry
 } from "./executor-types";
 import { createIframeSandboxRuntimeScript } from "./iframe-runtime";
 import { normalizeCode } from "./normalize";
@@ -213,6 +214,7 @@ export class IframeSandboxExecutor implements Executor {
     return new Promise<ExecuteResult>((resolve) => {
       let settled = false;
       let ready = false;
+      const toolCalls: ToolCallLogEntry[] = [];
       const warnedInvalidNonceTypes = new Set<string>();
 
       const cleanup = () => {
@@ -226,7 +228,12 @@ export class IframeSandboxExecutor implements Executor {
 
       const resolveError = (message: string) => {
         cleanup();
-        resolve({ result: undefined, error: message, logs: [] });
+        resolve({
+          result: undefined,
+          error: message,
+          logs: [],
+          toolCalls
+        });
       };
 
       const postToChild = (
@@ -275,26 +282,26 @@ export class IframeSandboxExecutor implements Executor {
             warnInvalidNonce("tool-call");
             return;
           }
+          const args = Array.isArray(data.args) ? data.args : [data.args];
+          const call: ToolCallLogEntry = {
+            provider: data.provider,
+            name: data.name,
+            args
+          };
+          toolCalls.push(call);
           const provider = providerMap.get(data.provider);
           if (!provider) {
-            postToChild(
-              createToolResultMessage(
-                nonce,
-                data.id,
-                `Provider "${data.provider}" not found`,
-                true
-              )
-            );
+            const message = `Provider "${data.provider}" not found`;
+            call.error = message;
+            postToChild(createToolResultMessage(nonce, data.id, message, true));
             return;
           }
           try {
-            const result = await invokeProviderTool(
-              provider,
-              data.args,
-              data.name
-            );
+            const result = await invokeProviderTool(provider, args, data.name);
+            call.result = result;
             postToChild(createToolResultMessage(nonce, data.id, result, false));
           } catch (err) {
+            call.error = err instanceof Error ? err.message : String(err);
             postToChild(createToolResultMessage(nonce, data.id, err, true));
           }
           return;
@@ -306,7 +313,7 @@ export class IframeSandboxExecutor implements Executor {
             return;
           }
           cleanup();
-          resolve(data.result);
+          resolve({ ...data.result, toolCalls });
         }
       };
 
@@ -319,7 +326,12 @@ export class IframeSandboxExecutor implements Executor {
 
       const timer = setTimeout(() => {
         cleanup();
-        resolve({ result: undefined, error: "Execution timed out", logs: [] });
+        resolve({
+          result: undefined,
+          error: "Execution timed out",
+          logs: [],
+          toolCalls
+        });
       }, this.#timeout);
 
       document.body.appendChild(iframe);
