@@ -93,9 +93,7 @@ jobs:
         env:
           # Inference via Cloudflare AI Gateway (same secrets as Bonk). Stay in
           # the parent process; not forwarded into the agent sandbox shell.
-          CLOUDFLARE_API_KEY: ${{ secrets.CF_AI_GATEWAY_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_AI_GATEWAY_ACCOUNT_ID }}
-          CLOUDFLARE_GATEWAY_ID: ${{ secrets.CF_AI_GATEWAY_NAME }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # Forwarded into the sandbox: read issue, push branch, open PR.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Passed via env (not interpolated into the command line) so crafted
