@@ -353,7 +353,10 @@ interface ExecuteResult {
   result: unknown;
   error?: string;
   logs?: string[];
+  /** The 100 most recent sandbox tool calls. */
   toolCalls?: ExecuteToolCall[];
+  /** Number of earlier tool calls omitted from `toolCalls`. */
+  droppedToolCallCount?: number;
 }
 ```
 

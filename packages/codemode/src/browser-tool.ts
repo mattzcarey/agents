@@ -65,6 +65,7 @@ export interface BrowserCodeToolDescriptor {
         items: { type: "object" };
         description: string;
       };
+      droppedToolCallCount: { type: "number"; description: string };
     };
     required: ["result"];
   };
@@ -216,6 +217,10 @@ export function createBrowserCodeTool(
           type: "array",
           items: { type: "object" },
           description: "Tool calls made during execution, including durationMs"
+        },
+        droppedToolCallCount: {
+          type: "number",
+          description: "Number of earlier tool calls omitted from toolCalls"
         }
       },
       required: ["result"]

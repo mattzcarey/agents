@@ -3,6 +3,8 @@
  * code in a sandbox (DynamicWorkerExecutor, IframeSandboxExecutor, ...).
  */
 
+export const MAX_EXECUTE_TOOL_CALLS = 100;
+
 export interface ExecuteToolCall {
   provider: string;
   name: string;
@@ -15,6 +17,7 @@ export interface ExecuteResult {
   error?: string;
   logs?: string[];
   toolCalls?: ExecuteToolCall[];
+  droppedToolCallCount?: number;
 }
 
 /**

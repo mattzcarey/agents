@@ -31,6 +31,9 @@ export async function runCode({
     ...(executeResult.logs?.length ? { logs: executeResult.logs } : {}),
     ...(executeResult.toolCalls?.length
       ? { toolCalls: executeResult.toolCalls }
+      : {}),
+    ...(executeResult.droppedToolCallCount
+      ? { droppedToolCallCount: executeResult.droppedToolCallCount }
       : {})
   };
 }

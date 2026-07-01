@@ -6,7 +6,10 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { IframeSandboxExecutor } from "../iframe-executor";
-import type { ResolvedProvider } from "../executor-types";
+import {
+  MAX_EXECUTE_TOOL_CALLS,
+  type ResolvedProvider
+} from "../executor-types";
 
 type ToolFns = Record<string, (...args: unknown[]) => Promise<unknown>>;
 
@@ -147,6 +150,40 @@ describe("IframeSandboxExecutor", () => {
       [codemodeProvider(fns)]
     );
     expect(result.result).toBe(13);
+  });
+
+  it("caps tool call logs at the most recent entries", async () => {
+    const executor = new IframeSandboxExecutor();
+    const fns = {
+      add: async (args: unknown) => {
+        const { i } = args as { i: number };
+        return i;
+      }
+    };
+
+    const result = await executor.execute(
+      `async () => {
+        for (let i = 0; i < ${MAX_EXECUTE_TOOL_CALLS + 5}; i++) {
+          await codemode.add({ i });
+        }
+        return "done";
+      }`,
+      [codemodeProvider(fns)]
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(result.toolCalls).toHaveLength(MAX_EXECUTE_TOOL_CALLS);
+    expect(result.droppedToolCallCount).toBe(5);
+    expect(result.toolCalls?.[0]).toMatchObject({
+      provider: "codemode",
+      name: "add",
+      args: [{ i: 5 }]
+    });
+    expect(result.toolCalls?.at(-1)).toMatchObject({
+      provider: "codemode",
+      name: "add",
+      args: [{ i: MAX_EXECUTE_TOOL_CALLS + 4 }]
+    });
   });
 
   it("should handle concurrent tool calls via Promise.all", async () => {

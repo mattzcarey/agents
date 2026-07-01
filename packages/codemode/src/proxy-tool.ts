@@ -105,6 +105,7 @@ export type ProxyToolOutput =
       result: unknown;
       logs?: string[];
       toolCalls?: CodeOutput["toolCalls"];
+      droppedToolCallCount?: CodeOutput["droppedToolCallCount"];
     }
   | {
       status: "paused";
@@ -688,7 +689,8 @@ async function runPass(
       executionId,
       result: await applyTransform(transformResult, result),
       logs: output?.logs,
-      toolCalls: output?.toolCalls
+      toolCalls: output?.toolCalls,
+      droppedToolCallCount: output?.droppedToolCallCount
     };
   } finally {
     if (!ended) {

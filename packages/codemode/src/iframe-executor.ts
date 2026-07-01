@@ -13,6 +13,7 @@ import {
   type ToolResultErrorMessage,
   type ToolResultSuccessMessage
 } from "./messages";
+import { MAX_EXECUTE_TOOL_CALLS } from "./executor-types";
 import type {
   ExecuteResult,
   ExecuteToolCall,
@@ -220,6 +221,15 @@ export class IframeSandboxExecutor implements Executor {
       let ready = false;
       const warnedInvalidNonceTypes = new Set<string>();
       const toolCalls: ExecuteToolCall[] = [];
+      let droppedToolCallCount = 0;
+
+      const recordToolCall = (call: ExecuteToolCall) => {
+        if (toolCalls.length >= MAX_EXECUTE_TOOL_CALLS) {
+          toolCalls.shift();
+          droppedToolCallCount++;
+        }
+        toolCalls.push(call);
+      };
 
       const cleanup = () => {
         if (settled) return;
@@ -232,7 +242,13 @@ export class IframeSandboxExecutor implements Executor {
 
       const resolveError = (message: string) => {
         cleanup();
-        resolve({ result: undefined, error: message, logs: [], toolCalls });
+        resolve({
+          result: undefined,
+          error: message,
+          logs: [],
+          toolCalls,
+          droppedToolCallCount
+        });
       };
 
       const postToChild = (
@@ -288,7 +304,7 @@ export class IframeSandboxExecutor implements Executor {
             args: Array.isArray(data.args) ? data.args : [data.args],
             durationMs: 0
           };
-          toolCalls.push(call);
+          recordToolCall(call);
           const provider = providerMap.get(data.provider);
           if (!provider) {
             call.durationMs = Math.max(0, nowMs() - startedAt);
@@ -323,7 +339,7 @@ export class IframeSandboxExecutor implements Executor {
             return;
           }
           cleanup();
-          resolve({ ...data.result, toolCalls });
+          resolve({ ...data.result, toolCalls, droppedToolCallCount });
         }
       };
 
@@ -340,7 +356,8 @@ export class IframeSandboxExecutor implements Executor {
           result: undefined,
           error: "Execution timed out",
           logs: [],
-          toolCalls
+          toolCalls,
+          droppedToolCallCount
         });
       }, this.#timeout);
 
