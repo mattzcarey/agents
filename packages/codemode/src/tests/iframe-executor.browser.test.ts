@@ -98,6 +98,15 @@ describe("IframeSandboxExecutor", () => {
     );
     expect(result.result).toBe("Sunny in London");
     expect(result.error).toBeUndefined();
+    expect(result.toolCalls).toEqual([
+      {
+        provider: "codemode",
+        name: "getWeather",
+        args: [{ location: "London" }],
+        durationMs: expect.any(Number)
+      }
+    ]);
+    expect(result.toolCalls?.[0]?.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("should sanitize tool names with hyphens and dots", async () => {

@@ -5,7 +5,12 @@
  * No dependency on `ai`, `@tanstack/ai`, or `zod`.
  */
 
-import type { Executor, ToolProvider, ToolProviderTools } from "./executor";
+import type {
+  Executor,
+  ExecuteToolCall,
+  ToolProvider,
+  ToolProviderTools
+} from "./executor";
 
 export const DEFAULT_DESCRIPTION = `Execute code to achieve a goal.
 
@@ -28,7 +33,11 @@ export interface CreateCodeToolOptions {
 }
 
 export type CodeInput = { code: string };
-export type CodeOutput = { result: unknown; logs?: string[] };
+export type CodeOutput = {
+  result: unknown;
+  logs?: string[];
+  toolCalls?: ExecuteToolCall[];
+};
 
 /**
  * Check if the tools option is an array of ToolProviders.

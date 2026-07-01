@@ -15,6 +15,7 @@ import {
 } from "./messages";
 import type {
   ExecuteResult,
+  ExecuteToolCall,
   Executor,
   ResolvedProvider
 } from "./executor-types";
@@ -37,6 +38,10 @@ export interface IframeSandboxExecutorOptions {
 const DEFAULT_CSP =
   "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval';";
 const DEFAULT_TIMEOUT = 30000;
+
+function nowMs(): number {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
 
 function escapeHtmlAttribute(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
@@ -214,6 +219,7 @@ export class IframeSandboxExecutor implements Executor {
       let settled = false;
       let ready = false;
       const warnedInvalidNonceTypes = new Set<string>();
+      const toolCalls: ExecuteToolCall[] = [];
 
       const cleanup = () => {
         if (settled) return;
@@ -226,7 +232,7 @@ export class IframeSandboxExecutor implements Executor {
 
       const resolveError = (message: string) => {
         cleanup();
-        resolve({ result: undefined, error: message, logs: [] });
+        resolve({ result: undefined, error: message, logs: [], toolCalls });
       };
 
       const postToChild = (
@@ -275,8 +281,17 @@ export class IframeSandboxExecutor implements Executor {
             warnInvalidNonce("tool-call");
             return;
           }
+          const startedAt = nowMs();
+          const call: ExecuteToolCall = {
+            provider: data.provider,
+            name: data.name,
+            args: Array.isArray(data.args) ? data.args : [data.args],
+            durationMs: 0
+          };
+          toolCalls.push(call);
           const provider = providerMap.get(data.provider);
           if (!provider) {
+            call.durationMs = Math.max(0, nowMs() - startedAt);
             postToChild(
               createToolResultMessage(
                 nonce,
@@ -293,8 +308,10 @@ export class IframeSandboxExecutor implements Executor {
               data.args,
               data.name
             );
+            call.durationMs = Math.max(0, nowMs() - startedAt);
             postToChild(createToolResultMessage(nonce, data.id, result, false));
           } catch (err) {
+            call.durationMs = Math.max(0, nowMs() - startedAt);
             postToChild(createToolResultMessage(nonce, data.id, err, true));
           }
           return;
@@ -306,7 +323,7 @@ export class IframeSandboxExecutor implements Executor {
             return;
           }
           cleanup();
-          resolve(data.result);
+          resolve({ ...data.result, toolCalls });
         }
       };
 
@@ -319,7 +336,12 @@ export class IframeSandboxExecutor implements Executor {
 
       const timer = setTimeout(() => {
         cleanup();
-        resolve({ result: undefined, error: "Execution timed out", logs: [] });
+        resolve({
+          result: undefined,
+          error: "Execution timed out",
+          logs: [],
+          toolCalls
+        });
       }, this.#timeout);
 
       document.body.appendChild(iframe);
