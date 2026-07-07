@@ -104,6 +104,7 @@ export type ProxyToolOutput =
       executionId: string;
       result: unknown;
       logs?: string[];
+      toolCalls?: CodeOutput["toolCalls"];
     }
   | {
       status: "paused";
@@ -686,7 +687,8 @@ async function runPass(
       status: "completed",
       executionId,
       result: await applyTransform(transformResult, result),
-      logs: output?.logs
+      logs: output?.logs,
+      toolCalls: output?.toolCalls
     };
   } finally {
     if (!ended) {

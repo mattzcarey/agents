@@ -342,10 +342,18 @@ interface ResolvedProvider {
   positionalArgs?: boolean;
 }
 
+interface ExecuteToolCall {
+  provider: string;
+  name: string;
+  args: unknown[];
+  durationMs: number;
+}
+
 interface ExecuteResult {
   result: unknown;
   error?: string;
   logs?: string[];
+  toolCalls?: ExecuteToolCall[];
 }
 ```
 

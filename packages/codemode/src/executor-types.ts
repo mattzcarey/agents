@@ -3,10 +3,18 @@
  * code in a sandbox (DynamicWorkerExecutor, IframeSandboxExecutor, ...).
  */
 
+export interface ExecuteToolCall {
+  provider: string;
+  name: string;
+  args: unknown[];
+  durationMs: number;
+}
+
 export interface ExecuteResult {
   result: unknown;
   error?: string;
   logs?: string[];
+  toolCalls?: ExecuteToolCall[];
 }
 
 /**

@@ -110,6 +110,15 @@ describe("DynamicWorkerExecutor", () => {
 
     expect(result.result).toBe(7);
     expect(add).toHaveBeenCalledWith({ a: 3, b: 4 });
+    expect(result.toolCalls).toEqual([
+      {
+        provider: "codemode",
+        name: "add",
+        args: [{ a: 3, b: 4 }],
+        durationMs: expect.any(Number)
+      }
+    ]);
+    expect(result.toolCalls?.[0]?.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("should preserve Uint8Array tool arguments and results", async () => {

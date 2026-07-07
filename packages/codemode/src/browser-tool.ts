@@ -60,6 +60,11 @@ export interface BrowserCodeToolDescriptor {
         items: { type: "string" };
         description: string;
       };
+      toolCalls: {
+        type: "array";
+        items: { type: "object" };
+        description: string;
+      };
     };
     required: ["result"];
   };
@@ -206,6 +211,11 @@ export function createBrowserCodeTool(
           type: "array",
           items: { type: "string" },
           description: "Console output captured during execution"
+        },
+        toolCalls: {
+          type: "array",
+          items: { type: "object" },
+          description: "Tool calls made during execution, including durationMs"
         }
       },
       required: ["result"]
