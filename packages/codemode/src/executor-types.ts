@@ -3,10 +3,25 @@
  * code in a sandbox (DynamicWorkerExecutor, IframeSandboxExecutor, ...).
  */
 
+export interface ToolCallLogEntry {
+  /** Namespace/provider the sandbox called (e.g. "codemode", "state"). */
+  provider: string;
+  /** Tool/function name inside the provider namespace. */
+  name: string;
+  /** Positional arguments as passed by sandbox code. */
+  args: unknown[];
+  /** Returned value when the call completed successfully. */
+  result?: unknown;
+  /** Error message when the call failed. */
+  error?: string;
+}
+
 export interface ExecuteResult {
   result: unknown;
   error?: string;
   logs?: string[];
+  /** Ordered log of sandbox tool calls for UI/debug surfaces. */
+  toolCalls?: ToolCallLogEntry[];
 }
 
 /**

@@ -19,7 +19,12 @@
  * concurrently without clobbering one another.
  */
 import { RpcTarget } from "cloudflare:workers";
-import type { Executor, ResolvedProvider, ConnectorBinding } from "./executor";
+import type {
+  ConnectorBinding,
+  Executor,
+  ResolvedProvider,
+  ToolCallLogEntry
+} from "./executor";
 import { runCode } from "./run-code";
 import { normalizeCode } from "./normalize";
 import type { CodemodeConnector, ConnectorDescription } from "./connectors";
@@ -104,6 +109,7 @@ export type ProxyToolOutput =
       executionId: string;
       result: unknown;
       logs?: string[];
+      toolCalls?: ToolCallLogEntry[];
     }
   | {
       status: "paused";
@@ -686,7 +692,8 @@ async function runPass(
       status: "completed",
       executionId,
       result: await applyTransform(transformResult, result),
-      logs: output?.logs
+      logs: output?.logs,
+      toolCalls: output?.toolCalls
     };
   } finally {
     if (!ended) {

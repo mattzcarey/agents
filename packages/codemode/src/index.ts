@@ -8,6 +8,7 @@ export {
   type ExecuteOptions,
   type ConnectorBinding,
   type ResolvedProvider,
+  type ToolCallLogEntry,
   type ToolProvider
 } from "./executor";
 export { sanitizeToolName } from "./utils";

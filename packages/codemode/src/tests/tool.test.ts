@@ -341,6 +341,28 @@ describe("createCodeTool", () => {
     ]);
   });
 
+  it("should include tool call logs in successful output", async () => {
+    const toolCalls = [
+      {
+        provider: "codemode",
+        name: "getWeather",
+        args: [{ location: "London" }],
+        result: { temp: 72 }
+      }
+    ];
+    const { executor } = createMockExecutor({ result: "ok", toolCalls });
+    const codeTool = createCodeTool({ tools, executor });
+
+    const output = await codeTool.execute?.(
+      { code: "async () => 'ok'" },
+      {} as unknown as Parameters<NonNullable<typeof codeTool.execute>>[1]
+    );
+
+    expect((output as unknown as Record<string, unknown>)?.toolCalls).toEqual(
+      toolCalls
+    );
+  });
+
   describe("code normalization", () => {
     it("should pass arrow functions through unchanged", async () => {
       const { executor, calls } = createMockExecutor();
