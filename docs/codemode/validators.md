@@ -149,3 +149,50 @@ Validators reject code or calls; they do not transform them. Perform normalizati
 Configured validation hooks fail closed. If a hook throws or returns an invalid result, Codemode logs the original value or exception in the host and blocks the operation. The model receives a generic error that names the validator but does not include thrown details, which could contain private application data.
 
 Validators should perform reads rather than side effects. Upstream APIs should still enforce transactional invariants because validation cannot prevent state from changing between a check and the eventual remote operation.
+
+## Built-in static validators
+
+Codemode ships two `validateCode` validators that reject programs which cannot succeed before a dynamic Worker execution is created. Both use the Oxc parser and semantic analyzer compiled to WebAssembly (`workerd-oxc`), so they run inside the Workers runtime with no external service.
+
+```ts
+import {
+  createCodemodeRuntime,
+  syntaxValidator,
+  semanticValidator
+} from "@cloudflare/codemode";
+
+const runtime = createCodemodeRuntime({
+  ctx: this.ctx,
+  executor,
+  connectors,
+  validators: [syntaxValidator(), semanticValidator()]
+});
+```
+
+### `syntaxValidator(options?)`
+
+Rejects code that is not parseable. The executor runs generated code as plain JavaScript, so the validator parses as JavaScript by default and rejects TypeScript-only syntax that would fail at execution.
+
+| Option      | Type           | Default    | Purpose                                                             |
+| ----------- | -------------- | ---------- | ------------------------------------------------------------------- |
+| `name`      | `string`       | `"syntax"` | Name attributed on diagnostics.                                     |
+| `language`  | `"js" \| "ts"` | `"js"`     | Language to parse as. Use `"ts"` only if the executor strips types. |
+| `maxIssues` | `number`       | `10`       | Maximum number of syntax diagnostics to report.                     |
+
+### `semanticValidator(options?)`
+
+Rejects code that parses but references things that do not exist:
+
+- **Unknown connectors** — a bare identifier that is neither a configured connector, the built-in `codemode` provider, nor an ambient JavaScript/Workers global. Such code throws `X is not defined` the moment it runs.
+- **Unknown methods** — a call to a method a configured connector does not expose. Enabled by default; disable with `checkMethods: false`. Connectors whose descriptors are empty are skipped because their method set is unknown.
+
+| Option           | Type                | Default      | Purpose                                                                      |
+| ---------------- | ------------------- | ------------ | ---------------------------------------------------------------------------- |
+| `name`           | `string`            | `"semantic"` | Name attributed on diagnostics.                                              |
+| `allowedGlobals` | `readonly string[]` | `[]`         | Extra injected identifiers to permit, such as the names of custom providers. |
+| `checkMethods`   | `boolean`           | `true`       | Also reject calls to methods a connector does not expose.                    |
+| `maxIssues`      | `number`            | `10`         | Maximum number of issues to report.                                          |
+
+The semantic analyzer works on a single file and has no knowledge of the ambient environment, so it treats every free identifier as unresolved. The validator subtracts a curated set of standard JavaScript and Workers globals (exported as `AMBIENT_SANDBOX_GLOBALS`) plus the built-in `codemode` provider before deciding an identifier is an unknown connector. Applications that register custom providers must list those provider names in `allowedGlobals`.
+
+Because these are `validateCode` validators, they run before the executor starts and a rejection creates no execution. They do not implement `validateToolCall`, so they are not recorded as resume-required.

@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@types/json-schema": "^7.0.15",
-    "acorn": "^8.17.0"
+    "acorn": "^8.17.0",
+    "workerd-oxc": "^0.6.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",

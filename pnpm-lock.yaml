@@ -3500,6 +3500,9 @@ importers:
       acorn:
         specifier: ^8.17.0
         version: 8.17.0
+      workerd-oxc:
+        specifier: ^0.6.0
+        version: 0.6.0
     devDependencies:
       '@modelcontextprotocol/sdk':
         specifier: 1.29.0
@@ -10754,6 +10757,9 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
+  workerd-oxc@0.6.0:
+    resolution: {integrity: sha512-1MSw6pM2DFJKRnfG/yQfn4pklu7SeWa+uXVGLr1qHovjQjVQnPsrL7mkBn/v7kq5ZP4O34LEVltL49kzwfgYNw==}
+
   workerd@1.20260611.1:
     resolution: {integrity: sha512-CS/640T7pIJ2HYX6x2DwKFGbcSckAWN3tgcdq+ptB6SaqjWUhlzIgA/YhPuwIU+/NnMnGpqOFX/hC18Oyge63w==}
     engines: {node: '>=16'}
@@ -17992,6 +17998,8 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  workerd-oxc@0.6.0: {}
 
   workerd@1.20260611.1:
     optionalDependencies:

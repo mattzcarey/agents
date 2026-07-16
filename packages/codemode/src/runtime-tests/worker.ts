@@ -17,6 +17,7 @@ import {
 import { DynamicWorkerExecutor } from "../executor";
 import { createCodemodeRuntime } from "../runtime-handle";
 import type { CodemodeValidator } from "../validation";
+import { syntaxValidator, semanticValidator } from "../validators";
 import {
   getCodemodeRuntime,
   type ProxyToolInput,
@@ -232,6 +233,30 @@ export class CodemodeTestHost extends DurableObject<Env> {
     options?: RunOptions & { name?: string }
   ): Promise<ProxyToolOutput> {
     const codemode = this.#runtime(options).tool();
+    const execute = codemode.execute as (
+      input: ProxyToolInput,
+      ctx: unknown
+    ) => Promise<ProxyToolOutput>;
+    return execute({ code }, { toolCallId: "test", messages: [] });
+  }
+
+  /**
+   * A runtime wired with the real static code validators (syntax + semantic)
+   * instead of the fake test-policy — used to prove that statically-doomed code
+   * is rejected before any execution (and therefore any sandbox cost).
+   */
+  #staticRuntime() {
+    const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER });
+    return createCodemodeRuntime({
+      ctx: this.ctx,
+      executor,
+      connectors: [this.#items()],
+      validators: [syntaxValidator(), semanticValidator()]
+    });
+  }
+
+  async runStatic(code: string): Promise<ProxyToolOutput> {
+    const codemode = this.#staticRuntime().tool();
     const execute = codemode.execute as (
       input: ProxyToolInput,
       ctx: unknown

@@ -30,6 +30,7 @@ interface Host {
     code: string,
     options?: { maxExecutions?: number; name?: string }
   ): Promise<ProxyToolOutput>;
+  runStatic(code: string): Promise<ProxyToolOutput>;
   approve(executionId: string): Promise<ProxyToolOutput>;
   approveWithoutValidators(executionId: string): Promise<ProxyToolOutput>;
   approveWithoutItems(executionId: string): Promise<ProxyToolOutput>;
@@ -95,6 +96,59 @@ describe("codemode durable runtime (e2e)", () => {
 
     expect(out.status).toBe("completed");
     if (out.status === "completed") expect(out.result).toEqual([]);
+  });
+
+  describe("static validators (syntax + semantic)", () => {
+    it("rejects a syntax error before any execution is created", async () => {
+      const h = host();
+      const out = await h.runStatic(
+        `async () => { return await items.list_items( }`
+      );
+
+      expect(out.status).toBe("error");
+      if (out.status !== "error") return;
+      expect(out.executionId).toBe("");
+      expect(out.error).toContain("syntax");
+      // No execution row created -> no dynamic Worker isolate was spun up.
+      expect(await h.executions()).toEqual([]);
+    });
+
+    it("rejects an unknown connector before any execution is created", async () => {
+      const h = host();
+      const out = await h.runStatic(
+        `async () => await slack.post({ text: "hi" })`
+      );
+
+      expect(out.status).toBe("error");
+      if (out.status !== "error") return;
+      expect(out.executionId).toBe("");
+      expect(out.error).toContain("slack");
+      expect(await h.executions()).toEqual([]);
+    });
+
+    it("rejects an unknown method before any execution is created", async () => {
+      const h = host();
+      const out = await h.runStatic(
+        `async () => await items.no_such_method({})`
+      );
+
+      expect(out.status).toBe("error");
+      if (out.status !== "error") return;
+      expect(out.executionId).toBe("");
+      expect(out.error).toContain("no_such_method");
+      expect(await h.executions()).toEqual([]);
+    });
+
+    it("lets valid code through to real execution", async () => {
+      const h = host();
+      const out = await h.runStatic(`async () => await items.list_items()`);
+
+      expect(out.status).toBe("completed");
+      if (out.status !== "completed") return;
+      expect(out.result).toEqual([]);
+      // A valid run *does* create an execution.
+      expect((await h.executions()).length).toBe(1);
+    });
   });
 
   it("rejects generated code before creating an execution", async () => {

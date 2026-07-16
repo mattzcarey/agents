@@ -25,6 +25,14 @@ export {
   type ToolCallValidationContext,
   type CodemodeValidator
 } from "./validation";
+export {
+  syntaxValidator,
+  semanticValidator,
+  AMBIENT_SANDBOX_GLOBALS,
+  BUILTIN_PROVIDER_GLOBALS,
+  type SyntaxValidatorOptions,
+  type SemanticValidatorOptions
+} from "./validators";
 export { resolveProvider } from "./resolve";
 export {
   truncateResponse,
